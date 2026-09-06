@@ -1,3 +1,18 @@
+const SUPABASE_URL = "https://hfebhndlidsavyqfoefg.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_YEoNohmYRLLmfTb-qug_SQ_CpuYBk2D";
+
+const db = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_PUBLISHABLE_KEY,
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false
+    }
+  }
+);
+
 const levels = [
   { level: "1.5", block: 1, type: "half" },
   { level: "2", block: 2, type: "full" },
@@ -29,7 +44,9 @@ const state = {
   selectedIndex: 0,
   selectedRoom: null,
   highlightedRoom: null,
-  calendarDate: new Date()
+  calendarDate: new Date(),
+  roomCache: new Map(),
+  calendarEvents: []
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -45,8 +62,42 @@ function currentLevel() {
   return levels[state.selectedIndex];
 }
 
-function storageKey(roomNum) {
-  return `dorm:${state.wing}:block${currentLevel().block}:room${roomNum}`;
+function roomCacheKey(wing, block, room) {
+  return `${wing}:${block}:${room}`;
+}
+
+function setSyncStatus(mode, text) {
+  const indicator = $("#syncIndicator");
+  const label = $("#syncText");
+  if (!indicator || !label) return;
+
+  indicator.classList.remove("is-ok", "is-error", "is-loading");
+  indicator.classList.add(`is-${mode}`);
+  label.textContent = text;
+}
+
+function showDbError(error, fallbackText = "Ошибка общей базы") {
+  console.error(error);
+  const detail = error?.message ? `: ${error.message}` : "";
+  setSyncStatus("error", fallbackText);
+  return detail;
+}
+
+async function testDatabaseConnection() {
+  setSyncStatus("loading", "Подключение к общей базе…");
+
+  const { error } = await db
+    .from("room_data")
+    .select("wing")
+    .limit(1);
+
+  if (error) {
+    showDbError(error, "База не подключена");
+    return false;
+  }
+
+  setSyncStatus("ok", "Общая база подключена");
+  return true;
 }
 
 function showSection(section) {
@@ -63,6 +114,7 @@ function showSection(section) {
     showScreen(state.screen);
   } else {
     renderCalendar();
+    void refreshCalendarEvents();
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 }
@@ -78,6 +130,10 @@ function showScreen(name) {
   $("#crumbWing").disabled = !state.wing;
   $("#crumbBlock").disabled = !state.wing;
 
+  if (name === "floor" && state.wing) {
+    void refreshCurrentBlockRoomData();
+  }
+
   if (state.section === "dorm") {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -86,12 +142,15 @@ function showScreen(name) {
 function selectWing(wing) {
   state.wing = wing;
   state.selectedIndex = 0;
+  state.highlightedRoom = null;
   renderWingScreen();
   renderFloorScreen();
   showScreen("wing");
 }
 
 function renderWingScreen() {
+  if (!state.wing) return;
+
   const info = wingNames[state.wing];
   $("#wingHeading").textContent = info.full;
   $("#wingBadge").textContent = info.upper;
@@ -126,6 +185,7 @@ function renderWingScreen() {
   $$("[data-index]").forEach(btn => {
     btn.addEventListener("click", () => {
       state.selectedIndex = Number(btn.dataset.index);
+      state.highlightedRoom = null;
       renderWingScreen();
       renderFloorScreen();
       showScreen("floor");
@@ -170,29 +230,100 @@ function renderFloorScreen() {
   $$("[data-mini-index]").forEach(btn => {
     btn.addEventListener("click", () => {
       state.selectedIndex = Number(btn.dataset.miniIndex);
+      state.highlightedRoom = null;
       renderFloorScreen();
       renderWingScreen();
+      void refreshCurrentBlockRoomData();
     });
   });
 
   updateRoomVisuals();
 
   $$("[data-room]").forEach(btn => {
-    btn.onclick = () => openRoom(Number(btn.dataset.room));
+    btn.onclick = () => void openRoom(Number(btn.dataset.room));
   });
 }
 
-function loadRoomData(roomNum) {
-  try {
-    const saved = localStorage.getItem(storageKey(roomNum));
-    return saved ? JSON.parse(saved) : { notes: "", colorValue: 0 };
-  } catch {
-    return { notes: "", colorValue: 0 };
-  }
+function getCachedRoomData(roomNum) {
+  if (!state.wing) return { notes: "", colorValue: 0 };
+
+  const key = roomCacheKey(state.wing, currentLevel().block, roomNum);
+  return state.roomCache.get(key) || { notes: "", colorValue: 0 };
 }
 
-function saveRoomData(roomNum, data) {
-  localStorage.setItem(storageKey(roomNum), JSON.stringify(data));
+async function refreshCurrentBlockRoomData() {
+  if (!state.wing) return false;
+
+  const wing = state.wing;
+  const item = currentLevel();
+  const block = item.block;
+
+  setSyncStatus("loading", "Обновляю данные комнат…");
+
+  const { data, error } = await db
+    .from("room_data")
+    .select("wing, block, level, room, notes, color_value")
+    .eq("wing", wing)
+    .eq("block", block)
+    .order("room", { ascending: true });
+
+  if (error) {
+    showDbError(error, "Не удалось загрузить комнаты");
+    return false;
+  }
+
+  for (let room = 1; room <= 8; room++) {
+    state.roomCache.set(
+      roomCacheKey(wing, block, room),
+      { notes: "", colorValue: 0 }
+    );
+  }
+
+  for (const row of data || []) {
+    state.roomCache.set(
+      roomCacheKey(row.wing, Number(row.block), Number(row.room)),
+      {
+        notes: row.notes || "",
+        colorValue: Number(row.color_value || 0)
+      }
+    );
+  }
+
+  if (state.wing === wing && currentLevel().block === block) {
+    updateRoomVisuals();
+  }
+
+  setSyncStatus("ok", "Данные синхронизированы");
+  return true;
+}
+
+async function saveRoomData(roomNum, roomData) {
+  const item = currentLevel();
+  const payload = {
+    wing: state.wing,
+    block: item.block,
+    level: String(item.level),
+    room: roomNum,
+    notes: roomData.notes || "",
+    color_value: Number(roomData.colorValue || 0),
+    updated_at: new Date().toISOString()
+  };
+
+  const { error } = await db
+    .from("room_data")
+    .upsert(payload, { onConflict: "wing,block,room" });
+
+  if (error) {
+    throw error;
+  }
+
+  state.roomCache.set(
+    roomCacheKey(state.wing, item.block, roomNum),
+    {
+      notes: payload.notes,
+      colorValue: payload.color_value
+    }
+  );
 }
 
 function colorFromValue(value) {
@@ -203,15 +334,20 @@ function colorFromValue(value) {
 function updateRoomVisuals() {
   $$("[data-room]").forEach(btn => {
     const roomNum = Number(btn.dataset.room);
-    const data = loadRoomData(roomNum);
+    const data = getCachedRoomData(roomNum);
     const color = colorFromValue(data.colorValue ?? 0);
     const hasCustom = Boolean(data.notes) || Number(data.colorValue) !== 0;
 
     btn.style.setProperty("--room-color", color);
     btn.classList.toggle("has-color", hasCustom);
-    btn.classList.toggle("calendar-highlight", Number(btn.dataset.room) === Number(state.highlightedRoom));
+    btn.classList.toggle(
+      "calendar-highlight",
+      Number(btn.dataset.room) === Number(state.highlightedRoom)
+    );
 
     const stateLabel = btn.querySelector(".room-state");
+    if (!stateLabel) return;
+
     if (data.notes && Number(data.colorValue) !== 0) {
       stateLabel.textContent = "есть заметка и цвет";
     } else if (data.notes) {
@@ -224,13 +360,16 @@ function updateRoomVisuals() {
   });
 }
 
-function openRoom(roomNum) {
+async function openRoom(roomNum) {
   state.selectedRoom = roomNum;
   state.highlightedRoom = null;
   updateRoomVisuals();
+
+  await refreshCurrentBlockRoomData();
+
   const info = wingNames[state.wing];
   const item = currentLevel();
-  const data = loadRoomData(roomNum);
+  const data = getCachedRoomData(roomNum);
 
   $("#dialogRoomCode").textContent = roomCode(roomNum);
   $("#dialogMeta").textContent = `${info.full} · блок ${item.block} · этаж ${item.level}`;
@@ -253,36 +392,78 @@ function updateColorPreview() {
   $("#colorPreview").style.background = colorFromValue($("#roomColor").value);
 }
 
-/* События календаря */
-const EVENTS_STORAGE_KEY = "dorm:calendarEvents";
+/* События общего календаря */
 
-function loadCalendarEvents() {
-  try {
-    const saved = localStorage.getItem(EVENTS_STORAGE_KEY);
-    const parsed = saved ? JSON.parse(saved) : [];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+function compactTime(value) {
+  return String(value || "").slice(0, 5);
+}
+
+function normalizeCalendarEvent(row) {
+  return {
+    id: String(row.id),
+    date: row.event_date,
+    start: compactTime(row.start_time),
+    end: compactTime(row.end_time),
+    wing: row.wing,
+    wingName: wingNames[row.wing]?.full || row.wing,
+    level: String(row.level),
+    block: Number(row.block),
+    room: Number(row.room),
+    calendarLabel: calendarRoomLabel(row.wing, row.level, row.room)
+  };
+}
+
+async function refreshCalendarEvents() {
+  setSyncStatus("loading", "Обновляю общий календарь…");
+
+  const { data, error } = await db
+    .from("calendar_events")
+    .select("id, event_date, start_time, end_time, wing, block, level, room")
+    .order("event_date", { ascending: true })
+    .order("start_time", { ascending: true });
+
+  if (error) {
+    showDbError(error, "Не удалось загрузить календарь");
+    return false;
   }
+
+  state.calendarEvents = (data || []).map(normalizeCalendarEvent);
+  renderCalendar();
+  setSyncStatus("ok", "Календарь синхронизирован");
+  return true;
 }
 
-function saveCalendarEvents(events) {
-  localStorage.setItem(EVENTS_STORAGE_KEY, JSON.stringify(events));
-}
+async function addCalendarEvent(event) {
+  const payload = {
+    event_date: event.date,
+    start_time: event.start,
+    end_time: event.end,
+    wing: event.wing,
+    block: event.block,
+    level: String(event.level),
+    room: event.room
+  };
 
-function addCalendarEvent(event) {
-  const events = loadCalendarEvents();
-  events.push(event);
-  events.sort((a, b) => {
+  const { data, error } = await db
+    .from("calendar_events")
+    .insert(payload)
+    .select("id, event_date, start_time, end_time, wing, block, level, room")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  state.calendarEvents.push(normalizeCalendarEvent(data));
+  state.calendarEvents.sort((a, b) => {
     const aKey = `${a.date}T${a.start}`;
     const bKey = `${b.date}T${b.start}`;
     return aKey.localeCompare(bKey);
   });
-  saveCalendarEvents(events);
 }
 
 function eventsForDate(dateKey) {
-  return loadCalendarEvents().filter(event => event.date === dateKey);
+  return state.calendarEvents.filter(event => event.date === dateKey);
 }
 
 function dateKeyLocal(date) {
@@ -305,7 +486,9 @@ function updateBookingPreview() {
   const preview = $("#bookingPreview");
 
   if (date && start && end && state.selectedRoom !== null) {
-    preview.textContent = `${formatDateRu(date)} · ${start}–${end} · ${calendarRoomLabel(state.wing, currentLevel().level, state.selectedRoom)}`;
+    preview.textContent =
+      `${formatDateRu(date)} · ${start}–${end} · ` +
+      `${calendarRoomLabel(state.wing, currentLevel().level, state.selectedRoom)}`;
     preview.classList.add("is-ready");
   } else {
     preview.textContent = "Выбери дату и время — запись появится в общем календаре.";
@@ -314,12 +497,13 @@ function updateBookingPreview() {
 }
 
 /* Календарь */
+
 const monthNames = [
   "Январь","Февраль","Март","Апрель","Май","Июнь",
   "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"
 ];
 
-function sameDate(a,b){
+function sameDate(a, b) {
   return a.getFullYear() === b.getFullYear() &&
          a.getMonth() === b.getMonth() &&
          a.getDate() === b.getDate();
@@ -346,22 +530,19 @@ function renderCalendar() {
 
     const otherMonth = d.getMonth() !== month;
     const isToday = sameDate(d, today);
-
     const dateKey = dateKeyLocal(d);
     const dayEvents = eventsForDate(dateKey);
-    const eventMarkup = dayEvents.map(event => {
-      const label = event.calendarLabel || calendarRoomLabel(event.wing, event.level, event.room);
-      return `
-        <button
-          class="calendar-event"
-          data-calendar-event-id="${event.id}"
-          title="${event.wingName} · этаж ${event.level} · блок ${event.block} · комната ${event.room}"
-        >
-          <span class="calendar-event-time">${event.start}–${event.end}</span>
-          <span class="calendar-event-room">${label}</span>
-        </button>
-      `;
-    }).join("");
+
+    const eventMarkup = dayEvents.map(event => `
+      <button
+        class="calendar-event"
+        data-calendar-event-id="${event.id}"
+        title="${event.wingName} · этаж ${event.level} · блок ${event.block} · комната ${event.room}"
+      >
+        <span class="calendar-event-time">${event.start}–${event.end}</span>
+        <span class="calendar-event-room">${event.calendarLabel}</span>
+      </button>
+    `).join("");
 
     cells.push(`
       <div class="calendar-day ${otherMonth ? "other-month" : ""} ${isToday ? "today" : ""}">
@@ -376,7 +557,9 @@ function renderCalendar() {
 
   $$("[data-calendar-event-id]").forEach(btn => {
     btn.addEventListener("click", () => {
-      const event = loadCalendarEvents().find(item => item.id === btn.dataset.calendarEventId);
+      const event = state.calendarEvents.find(
+        item => item.id === btn.dataset.calendarEventId
+      );
       if (!event) return;
       openCalendarEvent(event);
     });
@@ -409,65 +592,92 @@ function openCalendarEvent(event) {
   });
 }
 
+function setSaveBusy(busy) {
+  const button = $("#dialogSave");
+  if (!button) return;
+
+  button.disabled = busy;
+  button.textContent = busy ? "Сохраняю…" : "Сохранить";
+}
+
 $("#roomColor").addEventListener("input", updateColorPreview);
 $("#bookingDate").addEventListener("input", updateBookingPreview);
 $("#bookingStart").addEventListener("input", updateBookingPreview);
 $("#bookingEnd").addEventListener("input", updateBookingPreview);
 
-$("#dialogSave").addEventListener("click", () => {
+$("#dialogSave").addEventListener("click", async () => {
   if (state.selectedRoom === null) return;
-
-  saveRoomData(state.selectedRoom, {
-    notes: $("#roomNotes").value.trim(),
-    colorValue: Number($("#roomColor").value)
-  });
 
   const date = $("#bookingDate").value;
   const start = $("#bookingStart").value;
   const end = $("#bookingEnd").value;
   const hasAnyBookingField = Boolean(date || start || end);
 
+  $("#dialogMessage").textContent = "";
+  $("#dialogMessage").className = "dialog-message";
+
   if (hasAnyBookingField) {
     if (!date || !start || !end) {
-      $("#dialogMessage").textContent = "Для календаря выбери дату, время начала и время окончания.";
+      $("#dialogMessage").textContent =
+        "Для календаря выбери дату, время начала и время окончания.";
       $("#dialogMessage").className = "dialog-message is-error";
       return;
     }
 
     if (end <= start) {
-      $("#dialogMessage").textContent = "Время окончания должно быть позже времени начала.";
+      $("#dialogMessage").textContent =
+        "Время окончания должно быть позже времени начала.";
       $("#dialogMessage").className = "dialog-message is-error";
       return;
     }
-
-    const item = currentLevel();
-    const wingInfo = wingNames[state.wing];
-
-    addCalendarEvent({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      date,
-      start,
-      end,
-      roomCode: roomCode(state.selectedRoom),
-      calendarLabel: calendarRoomLabel(state.wing, item.level, state.selectedRoom),
-      wing: state.wing,
-      wingName: wingInfo.full,
-      level: item.level,
-      block: item.block,
-      room: state.selectedRoom
-    });
-
-    // Если событие сохранено в другом месяце, при открытии календаря сразу покажем его месяц.
-    const [year, month] = date.split("-").map(Number);
-    state.calendarDate = new Date(year, month - 1, 1);
-    renderCalendar();
   }
 
-  updateRoomVisuals();
-  $("#roomDialog").close();
+  setSaveBusy(true);
+  setSyncStatus("loading", "Сохраняю в общую базу…");
+
+  try {
+    const selectedRoom = state.selectedRoom;
+    const item = currentLevel();
+    const wing = state.wing;
+
+    await saveRoomData(selectedRoom, {
+      notes: $("#roomNotes").value.trim(),
+      colorValue: Number($("#roomColor").value)
+    });
+
+    if (hasAnyBookingField) {
+      await addCalendarEvent({
+        date,
+        start,
+        end,
+        wing,
+        level: item.level,
+        block: item.block,
+        room: selectedRoom
+      });
+
+      const [year, month] = date.split("-").map(Number);
+      state.calendarDate = new Date(year, month - 1, 1);
+      renderCalendar();
+    }
+
+    updateRoomVisuals();
+    setSyncStatus("ok", "Изменения сохранены для всех");
+    $("#roomDialog").close();
+  } catch (error) {
+    console.error(error);
+    $("#dialogMessage").textContent =
+      "Не получилось сохранить в общую базу. Проверь подключение Supabase.";
+    $("#dialogMessage").className = "dialog-message is-error";
+    setSyncStatus("error", "Ошибка сохранения");
+  } finally {
+    setSaveBusy(false);
+  }
 });
 
-$$("[data-wing]").forEach(btn => btn.addEventListener("click", () => selectWing(btn.dataset.wing)));
+$$("[data-wing]").forEach(btn =>
+  btn.addEventListener("click", () => selectWing(btn.dataset.wing))
+);
 
 $("#homeBtn").addEventListener("click", () => {
   showSection("dorm");
@@ -505,6 +715,7 @@ $("#prevMonth").addEventListener("click", () => {
     1
   );
   renderCalendar();
+  void refreshCalendarEvents();
 });
 
 $("#nextMonth").addEventListener("click", () => {
@@ -514,11 +725,33 @@ $("#nextMonth").addEventListener("click", () => {
     1
   );
   renderCalendar();
+  void refreshCalendarEvents();
 });
 
 $("#todayBtn").addEventListener("click", () => {
   state.calendarDate = new Date();
   renderCalendar();
+  void refreshCalendarEvents();
 });
 
-renderCalendar();
+/* Автообновление общей базы, чтобы изменения других людей подтягивались без F5 */
+setInterval(() => {
+  if (document.visibilityState !== "visible") return;
+
+  if (state.section === "calendar") {
+    void refreshCalendarEvents();
+  } else if (state.section === "dorm" && state.screen === "floor" && state.wing) {
+    void refreshCurrentBlockRoomData();
+  }
+}, 20000);
+
+async function bootstrap() {
+  renderCalendar();
+
+  const connected = await testDatabaseConnection();
+  if (!connected) return;
+
+  await refreshCalendarEvents();
+}
+
+void bootstrap();

@@ -597,3 +597,70 @@ dialog::backdrop{background:rgba(4,7,10,.76);backdrop-filter:blur(5px)}
   0%,100%{box-shadow:0 0 0 2px rgba(140,255,155,.16),0 16px 36px rgba(0,0,0,.3)}
   50%{box-shadow:0 0 0 7px rgba(140,255,155,.08),0 16px 36px rgba(0,0,0,.3)}
 }
+
+
+/* Версия 7: статус общей Supabase-базы */
+.sync-indicator{
+  position:fixed;
+  right:18px;
+  bottom:18px;
+  z-index:70;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  max-width:min(340px,calc(100vw - 36px));
+  padding:9px 12px;
+  border:1px solid #334159;
+  border-radius:999px;
+  background:rgba(14,20,30,.92);
+  color:#91a0b5;
+  font-size:11px;
+  font-weight:700;
+  box-shadow:0 12px 36px rgba(0,0,0,.28);
+  backdrop-filter:blur(12px);
+  transition:.18s ease;
+}
+.sync-dot{
+  width:8px;
+  height:8px;
+  flex:0 0 8px;
+  border-radius:50%;
+  background:#e3be4d;
+  box-shadow:0 0 0 4px rgba(227,190,77,.08);
+}
+.sync-indicator.is-ok{
+  border-color:rgba(140,255,155,.22);
+  color:#b7c6ba;
+}
+.sync-indicator.is-ok .sync-dot{
+  background:var(--accent);
+  box-shadow:0 0 0 4px rgba(140,255,155,.08);
+}
+.sync-indicator.is-error{
+  border-color:rgba(255,117,117,.3);
+  color:#ffc1c1;
+}
+.sync-indicator.is-error .sync-dot{
+  background:#ff7575;
+  box-shadow:0 0 0 4px rgba(255,117,117,.08);
+}
+.sync-indicator.is-loading .sync-dot{
+  animation:syncPulse 1s ease infinite;
+}
+@keyframes syncPulse{
+  0%,100%{opacity:.45;transform:scale(.88)}
+  50%{opacity:1;transform:scale(1.12)}
+}
+
+.primary-btn:disabled{
+  opacity:.55;
+  cursor:wait;
+}
+
+@media(max-width:700px){
+  .sync-indicator{
+    right:10px;
+    bottom:10px;
+    font-size:10px;
+  }
+}

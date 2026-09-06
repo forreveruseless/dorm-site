@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Навигация по общежитию — версия 4</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <button class="brand" id="homeBtn" aria-label="На главный экран">
+        <span class="brand-mark">D</span>
+        <span class="brand-text">
+          <strong>Общага</strong>
+          <small>интерактивная навигация</small>
+        </span>
+      </button>
+
+      <div class="top-tabs">
+        <button class="top-tab is-active" id="dormTab">Общага</button>
+        <button class="top-tab" id="calendarTab">Календарь</button>
+      </div>
+
+      <nav class="breadcrumbs" aria-label="Навигация">
+        <button class="crumb is-active" id="crumbHome">Общий вид</button>
+        <span>→</span>
+        <button class="crumb" id="crumbWing" disabled>Крыло</button>
+        <span>→</span>
+        <button class="crumb" id="crumbBlock" disabled>Блок</button>
+      </nav>
+    </header>
+
+    <main class="main">
+      <!-- ОБЩАГА -->
+      <div id="dormApp">
+        <section class="screen is-active" id="homeScreen">
+          <div class="intro">
+            <p class="eyebrow">НАВИГАЦИЯ ПО ОБЩЕЖИТИЮ</p>
+            <h1>Выбери крыло</h1>
+            <p class="lead">Сначала выбираешь крыло, затем блок и нужную комнату.</p>
+          </div>
+
+          <div class="dorm-scene">
+            <div class="building-label">ОБЩЕЖИТИЕ</div>
+
+            <button class="wing-shape wing-shape--left" data-wing="left">
+              <span class="wing-name">Левое крыло</span>
+              <span class="wing-hint">нажми, чтобы открыть</span>
+              <div class="wing-windows"></div>
+            </button>
+
+            <div class="core">
+              <div class="core-roof"></div>
+              <div class="core-windows"></div>
+              <div class="entrance">ВХОД</div>
+            </div>
+
+            <button class="wing-shape wing-shape--right" data-wing="right">
+              <span class="wing-name">Правое крыло</span>
+              <span class="wing-hint">нажми, чтобы открыть</span>
+              <div class="wing-windows"></div>
+            </button>
+          </div>
+        </section>
+
+        <section class="screen" id="wingScreen">
+          <div class="wing-header">
+            <div>
+              <p class="eyebrow">ВЫБОР БЛОКА</p>
+              <h1 id="wingHeading">Левое крыло</h1>
+              <p class="lead">Слева — полные этажи, справа — полуэтажи. Нажми на нужный блок.</p>
+            </div>
+
+            <button class="ghost-btn" id="changeWingBtn">Сменить крыло</button>
+          </div>
+
+          <div class="block-map-card">
+            <div class="block-map-title-row">
+              <div>
+                <strong class="card-title">Схема корпуса</strong>
+                <span class="card-subtitle">16 кликабельных блоков</span>
+              </div>
+              <div class="wing-badge" id="wingBadge">ЛЕВОЕ КРЫЛО</div>
+            </div>
+
+            <div class="building-map">
+              <div class="building-outline"></div>
+              <div class="building-base"></div>
+              <div class="building-center-label">КОРПУС</div>
+
+              <div class="column-label column-label--left">ПОЛНЫЕ ЭТАЖИ</div>
+              <div class="column-label column-label--right">ПОЛУЭТАЖИ</div>
+
+              <div class="floor-column floor-column--full" id="fullFloors"></div>
+              <div class="floor-column floor-column--half" id="halfFloors"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="screen" id="floorScreen">
+          <div class="floor-topline">
+            <div>
+              <p class="eyebrow">СХЕМА БЛОКА</p>
+              <h1 id="floorHeading">Левое крыло · блок 1</h1>
+              <p class="lead" id="floorSubheading">Этаж 1.5 · 8 комнат</p>
+            </div>
+
+            <div class="floor-actions">
+              <button class="ghost-btn" id="backToBuildingBtn">Назад к выбору блока</button>
+              <button class="ghost-btn" id="goHomeBtn">На главный экран</button>
+            </div>
+          </div>
+
+          <div class="schema-layout">
+            <aside class="mini-blocks-card">
+              <div class="mini-title">Все этажи</div>
+              <div class="mini-blocks" id="miniBlocks"></div>
+            </aside>
+
+            <section class="schema-card">
+              <div class="schema-header">
+                <div>
+                  <strong class="card-title">План блока</strong>
+                  <span class="card-subtitle">Все помещения стоят по ровной сетке и не пересекаются</span>
+                </div>
+                <div class="block-chip" id="blockChip">Блок 1</div>
+              </div>
+
+              <div class="block-schema">
+                <div class="schema-grid">
+                  <button class="room" data-room="1">
+                    <span class="room-index">01</span>
+                    <span class="room-title">Комната 1</span>
+                    <span class="room-state">без отметки</span>
+                  </button>
+                  <button class="room" data-room="2">
+                    <span class="room-index">02</span>
+                    <span class="room-title">Комната 2</span>
+                    <span class="room-state">без отметки</span>
+                  </button>
+                  <button class="room" data-room="3">
+                    <span class="room-index">03</span>
+                    <span class="room-title">Комната 3</span>
+                    <span class="room-state">без отметки</span>
+                  </button>
+                  <button class="room" data-room="4">
+                    <span class="room-index">04</span>
+                    <span class="room-title">Комната 4</span>
+                    <span class="room-state">без отметки</span>
+                  </button>
+
+                  <div class="service toilet">
+                    <span class="service-icon">WC</span>
+                    <strong>Туалет</strong>
+                  </div>
+                  <div class="service bath">
+                    <span class="service-icon">B</span>
+                    <strong>Ванна</strong>
+                  </div>
+                  <div class="corridor-zone">
+                    <span>КОРИДОР</span>
+                  </div>
+                  <div class="service kitchen">
+                    <span class="service-icon">K</span>
+                    <strong>Кухня</strong>
+                    <small>общая зона</small>
+                  </div>
+
+                  <button class="room" data-room="8">
+                    <span class="room-index">08</span>
+                    <span class="room-title">Комната 8</span>
+                    <span class="room-state">без отметки</span>
+                  </button>
+                  <button class="room" data-room="7">
+                    <span class="room-index">07</span>
+                    <span class="room-title">Комната 7</span>
+                    <span class="room-state">без отметки</span>
+                  </button>
+                  <button class="room" data-room="6">
+                    <span class="room-index">06</span>
+                    <span class="room-title">Комната 6</span>
+                    <span class="room-state">без отметки</span>
+                  </button>
+                  <button class="room" data-room="5">
+                    <span class="room-index">05</span>
+                    <span class="room-title">Комната 5</span>
+                    <span class="room-state">без отметки</span>
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+      </div>
+
+      <!-- КАЛЕНДАРЬ -->
+      <section class="calendar-screen" id="calendarScreen">
+        <div class="calendar-page-header">
+          <div>
+            <p class="eyebrow">КАЛЕНДАРЬ</p>
+            <h1>Все даты</h1>
+            <p class="lead">Переключай месяцы и просматривай календарь в одном месте.</p>
+          </div>
+
+          <button class="ghost-btn" id="todayBtn">Сегодня</button>
+        </div>
+
+        <div class="calendar-card">
+          <div class="calendar-toolbar">
+            <button class="calendar-nav" id="prevMonth" aria-label="Предыдущий месяц">←</button>
+            <div class="calendar-month-title">
+              <strong id="monthTitle">Сентябрь 2026</strong>
+              <span id="yearTitle">2026</span>
+            </div>
+            <button class="calendar-nav" id="nextMonth" aria-label="Следующий месяц">→</button>
+          </div>
+
+          <div class="weekdays">
+            <div>Пн</div>
+            <div>Вт</div>
+            <div>Ср</div>
+            <div>Чт</div>
+            <div>Пт</div>
+            <div>Сб</div>
+            <div>Вс</div>
+          </div>
+
+          <div class="calendar-grid" id="calendarGrid"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="roomDialog">
+    <button class="dialog-close" id="dialogClose" aria-label="Закрыть">×</button>
+
+    <p class="eyebrow">КОМНАТА</p>
+    <h2 id="dialogRoomCode">L01-1</h2>
+    <p class="room-location" id="dialogMeta">Левое крыло · блок 1 · этаж 1.5</p>
+
+    <div class="room-dialog-columns">
+      <div class="room-dialog-left">
+        <label class="notes-label" for="roomNotes">Заметки</label>
+        <textarea
+          id="roomNotes"
+          class="notes-area"
+          placeholder="Напиши здесь всё, что нужно запомнить про эту комнату..."
+        ></textarea>
+
+        <div class="color-section">
+          <div class="color-heading">
+            <div>
+              <span class="notes-label">Цвет комнаты</span>
+              <small>от зелёного до красного</small>
+            </div>
+            <div class="color-preview" id="colorPreview"></div>
+          </div>
+
+          <input
+            id="roomColor"
+            class="color-range"
+            type="range"
+            min="0"
+            max="100"
+            value="0"
+            step="1"
+          />
+
+          <div class="range-labels">
+            <span>зелёный</span>
+            <span>красный</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="room-dialog-right">
+        <div class="booking-panel">
+          <p class="booking-kicker">ВРЕМЕННОЙ ПРОМЕЖУТОК</p>
+          <h3>Добавить в календарь</h3>
+          <p class="booking-help">Выбери дату, время начала и окончания.</p>
+
+          <label class="field-label" for="bookingDate">Дата</label>
+          <input class="booking-input" id="bookingDate" type="date" />
+
+          <div class="time-fields">
+            <div>
+              <label class="field-label" for="bookingStart">С</label>
+              <input class="booking-input" id="bookingStart" type="time" />
+            </div>
+            <div>
+              <label class="field-label" for="bookingEnd">До</label>
+              <input class="booking-input" id="bookingEnd" type="time" />
+            </div>
+          </div>
+
+          <div class="booking-preview" id="bookingPreview">
+            Выбери дату и время — запись появится в общем календаре.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dialog-message" id="dialogMessage" aria-live="polite"></div>
+    <button class="primary-btn" id="dialogSave">Сохранить</button>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

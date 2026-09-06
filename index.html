@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Навигация по общежитию — версия 4</title>
+  <title>Навигация по общежитию — версия 8</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -20,6 +20,7 @@
       <div class="top-tabs">
         <button class="top-tab is-active" id="dormTab">Общага</button>
         <button class="top-tab" id="calendarTab">Календарь</button>
+        <button class="top-tab" id="relationsTab">Связи</button>
       </div>
 
       <nav class="breadcrumbs" aria-label="Навигация">
@@ -229,6 +230,85 @@
           <div class="calendar-grid" id="calendarGrid"></div>
         </div>
       </section>
+
+      <!-- СВЯЗИ -->
+      <section class="connections-screen" id="relationsScreen">
+        <div class="relations-page-header">
+          <div>
+            <p class="eyebrow">КАРТА СВЯЗЕЙ</p>
+            <h1>Связи комнат</h1>
+            <p class="lead">
+              Чем сильнее связь между комнатами, тем ближе они стремятся находиться на карте.
+            </p>
+          </div>
+
+          <div class="relations-actions">
+            <button class="ghost-btn" id="relationsRefreshBtn">Обновить</button>
+            <button class="ghost-btn" id="relationsResetViewBtn">Сбросить вид</button>
+          </div>
+        </div>
+
+        <div class="relations-layout">
+          <aside class="relations-info-card">
+            <div class="relations-info-head">
+              <span class="relations-info-icon">◎</span>
+              <div>
+                <strong>Как читать карту</strong>
+                <span>Каждая точка — отдельная комната.</span>
+              </div>
+            </div>
+
+            <div class="relation-legend">
+              <div class="relation-legend-item">
+                <span class="relation-line relation-line--close"></span>
+                <div><strong>Близкие</strong><small>толще и ближе</small></div>
+              </div>
+              <div class="relation-legend-item">
+                <span class="relation-line relation-line--friends"></span>
+                <div><strong>Друзья</strong><small>средняя связь</small></div>
+              </div>
+              <div class="relation-legend-item">
+                <span class="relation-line relation-line--acquaintances"></span>
+                <div><strong>Знакомые</strong><small>тоньше и дальше</small></div>
+              </div>
+            </div>
+
+            <div class="relations-tip">
+              Нажми на любую комнату на карте — откроется мини-карта общаги для выбора второй комнаты.
+            </div>
+
+            <div class="relations-stats">
+              <div>
+                <span>Комнат</span>
+                <strong id="relationsRoomsCount">256</strong>
+              </div>
+              <div>
+                <span>Связей</span>
+                <strong id="relationsLinksCount">0</strong>
+              </div>
+            </div>
+          </aside>
+
+          <div class="relations-graph-card">
+            <div class="relations-setup-notice" id="relationsSetupNotice" hidden>
+              <strong>Для связей нужна ещё одна таблица Supabase.</strong>
+              <span>Запусти файл <code>SUPABASE_RELATIONS_SETUP.sql</code> в SQL Editor, затем обнови страницу.</span>
+            </div>
+
+            <div class="relations-graph-stage" id="relationsGraphStage">
+              <svg id="relationsGraph" aria-label="Интерактивная карта связей комнат"></svg>
+              <div class="graph-tooltip" id="graphTooltip"></div>
+              <div class="graph-loading" id="graphLoading">
+                Загружаю карту связей…
+              </div>
+            </div>
+
+            <div class="relations-bottom-note">
+              Карту можно двигать мышью, приближать колёсиком и перетаскивать отдельные комнаты.
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -302,7 +382,77 @@
     </div>
 
     <div class="dialog-message" id="dialogMessage" aria-live="polite"></div>
-    <button class="primary-btn" id="dialogSave">Сохранить</button>
+    <div class="room-dialog-actions">
+      <button class="relation-launch-btn" id="newRelationBtn">＋ Новая связь</button>
+      <button class="primary-btn dialog-save-btn" id="dialogSave">Сохранить</button>
+    </div>
+  </dialog>
+
+
+  <dialog id="connectionDialog" class="connection-dialog">
+    <button class="dialog-close" id="connectionDialogClose" aria-label="Закрыть">×</button>
+
+    <p class="eyebrow">НОВАЯ СВЯЗЬ</p>
+    <h2 class="connection-title">Соединить комнаты</h2>
+
+    <div class="connection-source-card">
+      <span>Первая комната</span>
+      <strong id="connectionSourceLabel">L-1.5-1</strong>
+    </div>
+
+    <div class="connection-type-section">
+      <span class="connection-section-label">Тип связи</span>
+      <div class="connection-types">
+        <button class="connection-type is-active" data-relation-type="close">
+          <i class="type-dot type-dot--close"></i>
+          <span><strong>Близкие</strong><small>самая сильная связь</small></span>
+        </button>
+        <button class="connection-type" data-relation-type="friends">
+          <i class="type-dot type-dot--friends"></i>
+          <span><strong>Друзья</strong><small>средняя связь</small></span>
+        </button>
+        <button class="connection-type" data-relation-type="acquaintances">
+          <i class="type-dot type-dot--acquaintances"></i>
+          <span><strong>Знакомые</strong><small>лёгкая связь</small></span>
+        </button>
+      </div>
+    </div>
+
+    <div class="connection-picker-card">
+      <div class="connection-picker-head">
+        <div>
+          <span class="connection-section-label">Вторая комната</span>
+          <strong>Мини-карта общаги</strong>
+        </div>
+        <div class="connection-target-pill" id="connectionTargetLabel">не выбрана</div>
+      </div>
+
+      <div class="connection-wing-tabs">
+        <button class="connection-wing-tab is-active" data-picker-wing="left">Левое крыло</button>
+        <button class="connection-wing-tab" data-picker-wing="right">Правое крыло</button>
+      </div>
+
+      <div class="connection-floor-strip" id="connectionFloorList"></div>
+
+      <div class="connection-mini-plan">
+        <div class="connection-room-row connection-room-row--top" id="connectionRoomsTop"></div>
+
+        <div class="connection-mini-core">
+          <div>туалет</div>
+          <div>ванна</div>
+          <div class="connection-mini-corridor">коридор</div>
+          <div>кухня</div>
+        </div>
+
+        <div class="connection-room-row connection-room-row--bottom" id="connectionRoomsBottom"></div>
+      </div>
+    </div>
+
+    <div class="connection-message" id="connectionMessage" aria-live="polite"></div>
+
+    <button class="primary-btn" id="connectionSaveBtn" disabled>
+      Создать связь
+    </button>
   </dialog>
 
   <div class="sync-indicator" id="syncIndicator" title="Статус общей базы">
@@ -311,6 +461,7 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
